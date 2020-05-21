@@ -1,10 +1,6 @@
-# FlexTrack 
-Flexible Arduino-based tracker software for RTTY, LoRa and APRS.
+# FlexTrak AVR
 
+This is the firmware for the FlexTrak board.
 
-Using #defines in the main file, this can be configured for any combination
-of RTTY (using NTX2 or MTX2), LoRa (RFM98) and APRS (HX1).  Various
-parameters such as transmit frequency can be adjusted also.
+See separate FlexTrak repository for the Pi host software in Python.
 
-The default configuration is for the HABduino tracker - see http://www.habduino.org/,
-using RTTY and APRS.
