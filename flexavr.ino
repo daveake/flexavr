@@ -665,7 +665,7 @@ int ProcessFieldCommand(char *Line)
   }
   else if (Line[0] == 'T')
   {
-    GPS.Longitude = atof(Line+1);
+    GPS.Latitude = atof(Line+1);
     OK = 1;
   }
   else if (Line[0] == 'G')
