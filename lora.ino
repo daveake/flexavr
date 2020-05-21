@@ -474,7 +474,7 @@ void CheckLoRa(void)
     int PacketLength;
 
     // SSDV or Telemetry?
-    if (++ImageCount > Settings.ImageCount)
+    if (++ImageCount > (GPS.Altitude > Settings.High ? Settings.HighImageCount : Settings.HighImageCount))
     {
       ImageCount = 0;
     }

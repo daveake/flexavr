@@ -85,7 +85,7 @@ void Checkds18b20(void)
       for (i=0; i<SensorCount; i++)
       {
         GPS.Temperatures[i] = sensors.getTempCByIndex(i);
-        Serial.print("Temp"); Serial.print(i); Serial.print("="); Serial.print(GPS.Temperatures[i]); Serial.println("C");
+        Serial.print("Temp"); Serial.print(i); Serial.print("="); Serial.println(GPS.Temperatures[i]);
       }
       CheckDS18B20s = millis() + 10000L;
     }

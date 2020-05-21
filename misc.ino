@@ -80,6 +80,14 @@ int BuildSentence(char *TxLine)
     {
       sprintf(Temp, "%d", GPS.Temperatures[1-GPS.InternalTemperature]);
     }
+    else if (Field == 'C')
+    {
+      dtostrf(GPS.PredictedLatitude, 7, 5, Temp);
+    }
+    else if (Field == 'D')
+    {
+      dtostrf(GPS.PredictedLongitude, 7, 5, Temp);
+    }
 
     if (i > 0)
     {

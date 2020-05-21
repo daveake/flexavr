@@ -57,7 +57,9 @@ struct TSettings
   int           LoRaSlot;
 
   // SSDV
-  unsigned int  ImageCount;
+  unsigned int  LowImageCount;
+  unsigned int  HighImageCount;
+  unsigned int  High;
 
   // APRS
   double        APRS_Frequency;
@@ -91,11 +93,13 @@ struct TGPS
   int           BatteryVoltage;               // mV
   byte          FlightMode;
   byte          PowerMode;
+  float         PredictedLongitude, PredictedLatitude;
 } GPS;
 
 
 int ShowGPS=1;
 int ShowLoRa=1;
+int HostPriority=0;
 unsigned char SSDVBuffer[256];
 unsigned int SSDVBufferLength=0;
 
@@ -155,7 +159,9 @@ void SetDefaults(void)
   LoRaDefaults();
 
   // SSDV Settings
-  Settings.ImageCount = 4;
+  Settings.LowImageCount = 4;
+  Settings.HighImageCount = 8;
+  Settings.High = 2000;
 
   // APRS Settings
   Settings.APRS_Frequency = 144.8;
@@ -177,18 +183,21 @@ void SetDefaults(void)
 void loop()
 {  
   CheckHost();
-  
-  CheckGPS();
 
-  CheckLEDs();
+  if (!HostPriority)
+  {
+    CheckGPS();
 
-  CheckLoRa();
-  
-  CheckADC();
-  
-  Checkds18b20();
+    CheckLEDs();
 
-  CheckAPRS();
+    CheckLoRa();
+  
+    CheckADC();
+  
+    Checkds18b20();
+
+    CheckAPRS();
+  }
 }
 
 void ShowVersion(void)
@@ -306,6 +315,10 @@ void ProcessCommand(char *Line)
   {
     OK = ProcessSSDVCommand(Line+1);
   }
+  else if (Line[0] == 'F')
+  {
+    OK = ProcessFieldCommand(Line+1);
+  }
 
   if (OK)
   {
@@ -346,8 +359,14 @@ int ProcessGPSCommand(char *Line)
 int ProcessCommonCommand(char *Line)
 {
   int OK = 0;
-  
-  if (Line[0] == 'P')
+
+  if (Line[0] == 'H')
+  {
+    // HostPriority mode
+    HostPriority = Line[1] == '1';
+    OK = 1;
+  }
+  else if (Line[0] == 'P')
   {
     // Store payload ID
     if (strlen(Line+1) < PAYLOAD_LENGTH)
@@ -620,7 +639,27 @@ int ProcessSSDVCommand(char *Line)
   else if (Line[0] == 'I')
   {
     // SSDV Image Count
-    Settings.ImageCount = atoi(Line+1);
+    sscanf(Line+1, "%d,%d,%d", &Settings.LowImageCount, Settings.HighImageCount, &Settings.High);
+    // Settings.ImageCount = atoi(Line+1);
+    OK = 1;
+  }
+  
+  return OK;
+}
+
+
+int ProcessFieldCommand(char *Line)
+{
+  int OK = 0;
+
+  if (Line[0] == 'A')
+  {
+    GPS.PredictedLatitude = atof(Line+1);
+    OK = 1;
+  }
+  else if (Line[0] == 'O')
+  {
+    GPS.PredictedLongitude = atof(Line+1);
     OK = 1;
   }
   
