@@ -169,8 +169,12 @@ void ProcessUBX_NAV_PVT(unsigned char *Buffer)
     GPS.Day = UBlox->Day;
     GPS.Month = UBlox->Month;
     GPS.Year = UBlox->Year;
-    
-    if ((UBlox->FixType >= 1) && (UBlox->FixType <= 4))
+
+    if (GPS.UseHostPosition)
+    {
+      GPS.UseHostPosition--;
+    }
+    else if ((UBlox->FixType >= 1) && (UBlox->FixType <= 4))
     {
       GPS.Longitude = (float)(UBlox->Longitude) / 10000000;
       GPS.Latitude = (float)(UBlox->Latitude) / 10000000;

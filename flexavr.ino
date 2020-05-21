@@ -94,6 +94,7 @@ struct TGPS
   byte          FlightMode;
   byte          PowerMode;
   float         PredictedLongitude, PredictedLatitude;
+  int           UseHostPosition;
 } GPS;
 
 
@@ -660,6 +661,22 @@ int ProcessFieldCommand(char *Line)
   else if (Line[0] == 'O')
   {
     GPS.PredictedLongitude = atof(Line+1);
+    OK = 1;
+  }
+  else if (Line[0] == 'T')
+  {
+    GPS.Longitude = atof(Line+1);
+    OK = 1;
+  }
+  else if (Line[0] == 'G')
+  {
+    GPS.Longitude = atof(Line+1);
+    OK = 1;
+  }
+  else if (Line[0] == 'U')
+  {
+    GPS.Altitude = atoi(Line+1);
+    GPS.UseHostPosition = 5;
     OK = 1;
   }
   

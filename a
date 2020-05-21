@@ -1,0 +1,7 @@
+echo Setup GPIO
+gpio mode 1 output
+echo Reset AVR
+gpio write 1 0
+gpio write 1 1
+echo Start AVRDude
+avrdude -v -p atmega328p -c arduino -P /dev/ttyAMA0 -b 57600 -D -U flash:w:flexavr.ino.hex:i
