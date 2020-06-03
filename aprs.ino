@@ -74,9 +74,9 @@ void SetupAPRS(void)
   
   APRS_Serial.begin(9600);
 
-  SetAPRSFrequency();
-
-  SetAPRSPreEmphasis();
+//  SetAPRSFrequency();
+//
+//  SetAPRSPreEmphasis();
 }
 
 void SetAPRSFrequency(void)
@@ -89,7 +89,7 @@ void SetAPRSFrequency(void)
   strcat(Command, Frequency);
   strcat(Command, ",144.8000,0012,4,0003\r\n");
 
-  Serial.println("Send APRS Freq command");
+  Serial.println(F("Send APRS Freq command"));
   APRS_Serial.print(Command);
   Serial.print(Command);
 
@@ -104,7 +104,7 @@ void SetAPRSPreEmphasis(void)
 
   sprintf(Command, "AT+SETFILTER=%d,1,1\r\n", !Settings.APRS_PreEmphasis);
 
-  Serial.println("Send APRS Mode command");
+  Serial.println(F("Send APRS Mode command"));
   APRS_Serial.print(Command);
   Serial.print(Command);
   

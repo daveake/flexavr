@@ -47,7 +47,7 @@ struct TSettings
   
   // LoRa
   float LORA_Frequency;
-  unsigned char ImplicitOrExplicit;             // 1=Implicit, 0=Explicit
+  unsigned char Implicit;             // 1=Implicit, 0=Explicit
   unsigned char ErrorCoding;
   unsigned char Bandwidth;
   unsigned char SpreadingFactor;
@@ -436,9 +436,9 @@ int ProcessLORACommand(char *Line)
   }
   else if (Line[0] == 'I')
   {
-    int ImplicitOrExplicit = atoi(Line+1);
+    int Implicit = atoi(Line+1);
     
-    Settings.ImplicitOrExplicit = ImplicitOrExplicit ? 1 : 0;
+    Settings.Implicit = Implicit ? 1 : 0;
     OK = 1;
   }
   else if (Line[0] == 'E')
@@ -478,7 +478,7 @@ int ProcessLORACommand(char *Line)
   {
     int LowDataRateOptimize = atoi(Line+1);
     
-    Settings.LowDataRateOptimize = LowDataRateOptimize ? 1 : 0;
+    Settings.LowDataRateOptimize = LowDataRateOptimize ? 0x08 : 0;
     OK = 1;
   }
   else if (Line[0] == 'T')

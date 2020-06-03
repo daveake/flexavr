@@ -111,7 +111,7 @@ unsigned long TimeToSendIfNoGPS=0;
 
 void LoRaDefaults(void)
 {
-  Settings.ImplicitOrExplicit = EXPLICIT_MODE;
+  Settings.Implicit = 0;
   Settings.ErrorCoding = ERROR_CODING_4_8;
   Settings.Bandwidth = BANDWIDTH_20K8;
   Settings.SpreadingFactor = SPREADING_11;
@@ -140,9 +140,9 @@ void SwitchToLoRaMode(void)
   // Frequency
   SetLoRaFrequency();
 
-  PayloadLength = (Settings.ImplicitOrExplicit == IMPLICIT_MODE) ? 255 : 0;
+  PayloadLength = Settings.Implicit ? 255 : 0;
 
-  writeRegister(REG_MODEM_CONFIG, Settings.ImplicitOrExplicit | Settings.ErrorCoding | Settings.Bandwidth);
+  writeRegister(REG_MODEM_CONFIG, Settings.Implicit | Settings.ErrorCoding | Settings.Bandwidth);
   writeRegister(REG_MODEM_CONFIG2, Settings.SpreadingFactor | CRC_ON);
   writeRegister(REG_MODEM_CONFIG3, 0x04 | Settings.LowDataRateOptimize);									// 0x04: AGC sets LNA gain
   
@@ -333,7 +333,9 @@ int LoRaIsFree(void)
 {
   if ((LoRaMode != lmSending) || digitalRead(LORA_DIO0))
   {
-    // Serial.println("LoRaIsFree");
+//    Serial.println(F("LoRaIsFree"));
+//    Serial.print(F("LoRaMode = "));Serial.println(LoRaMode);
+//    Serial.print(F("DIO0 = "));Serial.println(digitalRead(LORA_DIO0));
     // Either not sending, or was but now it's sent.  Clear the flag if we need to
     if (LoRaMode == lmSending)
     {
@@ -380,11 +382,8 @@ void SendLoRa(unsigned char *buffer, int Length)
 
   // writeRegister(REG_DIO_MAPPING_1, 0x40);		// 01 00 00 00 maps DIO0 to TxDone
   writeRegister(REG_FIFO_TX_BASE_AD, 0x00);  // Update the address ptr to the current tx base address
-  writeRegister(REG_FIFO_ADDR_PTR, 0x00); 
-  if (Settings.ImplicitOrExplicit == EXPLICIT_MODE)
-  {
-    writeRegister(REG_PAYLOAD_LENGTH, Length);
-  }
+  writeRegister(REG_FIFO_ADDR_PTR, 0x00);
+    
   select();
   // tell SPI which address you want to write to
   SPI.transfer(REG_FIFO | 0x80);
@@ -396,10 +395,30 @@ void SendLoRa(unsigned char *buffer, int Length)
   }
   unselect();
 
+//  Serial.print(F("Sentence Length = ")); Serial.println(Length);
+
+  if (Settings.Implicit)
+  {
+    Length = 255;
+  }
+  
+//  Serial.print(F("Sentence Length = ")); Serial.println(Length);
+//  Serial.print(F("Implicit = ")); Serial.println(Settings.Implicit);
+//  Serial.print(F("ErrorCoding = ")); Serial.println(Settings.ErrorCoding);
+//  Serial.print(F("Bandwidth = ")); Serial.println(Settings.Bandwidth);
+//  Serial.print(F("SpreadingFactor = ")); Serial.println(Settings.SpreadingFactor);
+//  Serial.print(F("LowDataRateOptimize = ")); Serial.println(Settings.LowDataRateOptimize);
+ 
+  writeRegister(REG_PAYLOAD_LENGTH, Length);
+
   // go into transmit mode
   setMode(RF98_MODE_TX);
   
   LoRaMode = lmSending;
+
+//  Serial.println(digitalRead(LORA_DIO0));
+//  delay(500);
+//  Serial.println("");
 }
 
 //void startReceiving(void)
@@ -488,14 +507,14 @@ void CheckLoRa(void)
       // Telemetry
       PacketLength = BuildSentence((char *)Telemetry);
    
-      SendLoRa(Telemetry, PacketLength);    
-      
       if (ShowLoRa)
       {
         Serial.print(F("LORA="));
         Serial.print((char *)Telemetry);
         Serial.print('\r');
       }
+
+      SendLoRa(Telemetry, PacketLength);    
     }
     else
     {

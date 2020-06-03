@@ -30,7 +30,7 @@ void Setupds18b20(void)
   // Grab a count of devices on the wire
   SensorCount = sensors.getDeviceCount();
   Serial.print(SensorCount);
-  Serial.println(" DS18B20's on bus");
+  Serial.println(F(" DS18B20's on bus"));
   SensorCount = min(SensorCount, MAX_SENSORS);
   if (SensorCount > 0)
   {
@@ -45,7 +45,7 @@ void Setupds18b20(void)
     {
       memcpy(Settings.DS18B20_Address, Thermometer, 8);
       SaveSettings();
-      Serial.println("Stored new DS18B20 address");
+      Serial.println(F("Stored new DS18B20 address"));
     }
   }
 
@@ -65,11 +65,11 @@ void Setupds18b20(void)
     if (memcmp(Thermometer, Settings.DS18B20_Address, 8) == 0)
     {
       GPS.InternalTemperature = j;
-      Serial.println("<-- INTERNAL");
+      Serial.println(F("<-- INTERNAL"));
     }
     else
     {
-      Serial.println("    External");
+      Serial.println(F("    External"));
     }
   }
 }
@@ -85,7 +85,7 @@ void Checkds18b20(void)
       for (i=0; i<SensorCount; i++)
       {
         GPS.Temperatures[i] = sensors.getTempCByIndex(i);
-        Serial.print("Temp"); Serial.print(i); Serial.print("="); Serial.println(GPS.Temperatures[i]);
+        Serial.print(F("Temp")); Serial.print(i); Serial.print("="); Serial.println(GPS.Temperatures[i]);
       }
       CheckDS18B20s = millis() + 10000L;
     }
