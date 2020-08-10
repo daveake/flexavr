@@ -9,7 +9,7 @@
 #include <SoftwareSerial.h>
 #include <avr/pgmspace.h>
 
-#define   VERSION   F("V1.00")
+#define   VERSION   F("V1.01")
 
 //------------------------------------------------------------------------------------------------------
 
@@ -101,6 +101,7 @@ struct TGPS
 int ShowGPS=1;
 int ShowLoRa=1;
 int HostPriority=0;
+unsigned long HostTimeout=0;
 unsigned char SSDVBuffer[256];
 unsigned int SSDVBufferLength=0;
 
@@ -183,10 +184,21 @@ void SetDefaults(void)
 
 void loop()
 {  
-  CheckHost();
-
-  if (!HostPriority)
+  if (HostPriority)
   {
+    if (CheckHost())
+    {
+      HostTimeout = millis() + 2000;
+    }
+    else if (millis() > HostTimeout)
+    {
+      HostPriority = 0;
+    }
+  }
+  else
+  {
+    CheckHost();
+
     CheckGPS();
 
     CheckLEDs();
@@ -243,15 +255,19 @@ void SaveSettings(void)
   }
 }
 
-void CheckHost(void)
+int CheckHost(void)
 {
   static char Line[COMMAND_BUFFER_LENGTH];
   static unsigned int Length=0;
   static unsigned int BinaryMode=0;
   char Character;
-
+  int GotCharacters;
+  
+  GotCharacters = 0;
+  
   while (Serial.available())
   { 
+    GotCharacters = 1;
     Character = Serial.read();
 
     if (BinaryMode)
@@ -290,6 +306,8 @@ void CheckHost(void)
       }
     }
   }
+
+  return GotCharacters;
 }
 
 void ProcessCommand(char *Line)
@@ -365,6 +383,7 @@ int ProcessCommonCommand(char *Line)
   {
     // HostPriority mode
     HostPriority = Line[1] == '1';
+    HostTimeout = millis() + 2000;
     OK = 1;
   }
   else if (Line[0] == 'P')
@@ -568,10 +587,9 @@ int ProcessAPRSCommand(char *Line)
     Settings.APRS_Random = atoi(Line+1);
     OK = 1;
   }
-  else if (Line[0] == 'P')
+  else if (Line[0] == 'M')
   {
     Settings.APRS_PreEmphasis = atoi(Line+1);
-    // SetAPRSPreEmphasis();
     OK = 1;
   }
   else if (Line[0] == 'T')
