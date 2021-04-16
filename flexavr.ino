@@ -1,15 +1,13 @@
-
 /*------------------------------------------------------------------------------------------------------*\
 |                                                                                                        |
-| PITS V3 Firmware                                                                                       |
+| FlexTrak Firmware                                                                                       |
 |                                                                                                        |
 \*------------------------------------------------------------------------------------------------------*/
 
 #include <EEPROM.h>
-#include <SoftwareSerial.h>
 #include <avr/pgmspace.h>
 
-#define   VERSION   F("V1.01")
+#define   VERSION   F("V1.20")
 
 //------------------------------------------------------------------------------------------------------
 
@@ -24,12 +22,13 @@
   #define APRS_DATA              3
   #define APRS_TX               A1   // 15
   #define APRS_RX               A2   // 16 
+  #define CUTDOWN               A3
 
 //------------------------------------------------------------------------------------------------------
 
-#define SENTENCE_LENGTH       100                  // This is more than sufficient for the standard sentence.  Extend if needed; shorten if you are tight on memory.
+#define SENTENCE_LENGTH       120                  // This is more than sufficient for the standard sentence.  Extend if needed; shorten if you are tight on memory.
 #define PAYLOAD_LENGTH         16
-#define FIELDLIST_LENGTH       16
+#define FIELDLIST_LENGTH       24
 #define COMMAND_BUFFER_LENGTH  70
 
 //------------------------------------------------------------------------------------------------------
@@ -52,9 +51,8 @@ struct TSettings
   unsigned char Bandwidth;
   unsigned char SpreadingFactor;
   unsigned char LowDataRateOptimize;
-  unsigned char LoRaCount;
   unsigned int  LoRaCycleTime;
-  int           LoRaSlot;
+  unsigned char LoRaSlot;
 
   // SSDV
   unsigned int  LowImageCount;
@@ -62,7 +60,7 @@ struct TSettings
   unsigned int  High;
 
   // APRS
-  double        APRS_Frequency;
+  float         APRS_Frequency;
   char          APRS_Callsign[7];               // Max 6 characters
   char          APRS_SSID;
   int           APRS_PathAltitude;
@@ -72,6 +70,13 @@ struct TSettings
   char          APRS_Random;
   char          APRS_TelemInterval;
 
+  // Cutdown
+  unsigned int  CutdownAltitude;
+  unsigned char CutdownPeriod;
+
+  // Uplink
+  char          UplinkCode[16];
+
   // DS18B20
   unsigned char DS18B20_Address[8];
 } Settings;
@@ -79,33 +84,35 @@ struct TSettings
 struct TGPS
 {
   int           Day, Month, Year;
-  int           Hours, Minutes, Seconds;
+  byte          Hours, Minutes, Seconds;
   unsigned long SecondsInDay;					// Time in seconds since midnight
   float         Longitude, Latitude;
   long          Altitude;
-  unsigned int  Satellites;
+  byte          Satellites;
   int           Speed;
   int           Direction;
   byte          FixType;
-  byte          psm_status;
   int           Temperatures[2];             // C
   byte          InternalTemperature;        // Index of internal temperature
   int           BatteryVoltage;               // mV
   byte          FlightMode;
   byte          PowerMode;
   float         PredictedLongitude, PredictedLatitude;
-  int           UseHostPosition;
+  byte          UseHostPosition;
+  int           LastPacketSNR;
+  int           LastPacketRSSI;
+  unsigned int  ReceivedCommandCount;
+  byte          CutdownStatus;
+  int			      ExtraFields[6];
 } GPS;
 
 
-int ShowGPS=1;
-int ShowLoRa=1;
-int HostPriority=0;
+byte ShowGPS=1;
+byte ShowLoRa=1;
+byte HostPriority=0;
 unsigned long HostTimeout=0;
 unsigned char SSDVBuffer[256];
 unsigned int SSDVBufferLength=0;
-
-SoftwareSerial APRS_Serial(APRS_RX, APRS_TX);
 
 //------------------------------------------------------------------------------------------------------
 
@@ -121,7 +128,7 @@ void setup()
   Serial.print(F("Free memory = "));
   Serial.println(freeRam());
 
-  if ((EEPROM.read(0) == 'D') && (EEPROM.read(1) == 'A'))
+  if ((EEPROM.read(0) == 'D') && (EEPROM.read(1) == 'C'))
   {
     // Store current (default) settings
     LoadSettings();
@@ -132,6 +139,8 @@ void setup()
   }
 
   SetupLEDs();
+
+  SetupCutdown();
   
   SetupGPS();
   
@@ -141,21 +150,25 @@ void setup()
 
   Setupds18b20();
 
+#ifdef APRS_DATA
   SetupAPRS();
+#endif  
 }
 
 void SetDefaults(void)
 {
   // Common settings
-  strcpy(Settings.PayloadID, "CHANGEME");
-  strcpy(Settings.FieldList, "0123456789A");
+  const static char DefaultPayloadID[] PROGMEM = "CHANGEME";
+  strcpy_P(Settings.PayloadID, (char *)DefaultPayloadID);
+
+  const static char DefaultFieldList[] PROGMEM = "0123456789A";
+  strcpy_P(Settings.FieldList, (char *)DefaultFieldList);
 
   // GPS Settings
   Settings.FlightModeAltitude = 2000;
 
   // LoRa Settings
-  Settings.LORA_Frequency = 434.275;
-  Settings.LoRaCount = 1;
+  Settings.LORA_Frequency = 434.225;
   Settings.LoRaCycleTime = 0;
   Settings.LoRaSlot = -1;
   LoRaDefaults();
@@ -203,13 +216,17 @@ void loop()
 
     CheckLEDs();
 
+    CheckCutdown();
+
     CheckLoRa();
   
     CheckADC();
   
     Checkds18b20();
 
+#ifdef APRS_DATA
     CheckAPRS();
+#endif    
   }
 }
 
@@ -422,6 +439,18 @@ int ProcessCommonCommand(char *Line)
     ShowVersion();
     OK = 1;
   }
+  else if (Line[0] == 'C')
+  {
+    // Cutdown Altitude   
+     Settings.CutdownAltitude = atoi(Line+1);
+     OK = 1;
+  }
+  else if (Line[0] == 'T')
+  {
+    // Cutdown Time  
+     Settings.CutdownPeriod = atoi(Line+1);
+     OK = 1;
+  }
 
   return OK;
 }
@@ -482,17 +511,6 @@ int ProcessLORACommand(char *Line)
       OK = 1;
     }
   }
-  else if (Line[0] == 'C')
-  {
-    // LORA Count
-    int Count = atoi(Line+1);
-    
-    if ((Count >= 0) && (Count < 20))
-    {
-      Settings.LoRaCount = Count;
-      OK = 1;
-    }
-  }
   else if (Line[0] == 'L')
   {
     int LowDataRateOptimize = atoi(Line+1);
@@ -519,6 +537,11 @@ int ProcessLORACommand(char *Line)
       Settings.LoRaSlot = LoRaSlot;
       OK = 1;
     }
+  }
+  else if (Line[0] == 'U')
+  {
+    strncpy(Settings.UplinkCode, Line+1, sizeof(Settings.UplinkCode));
+    OK = 1;
   }
 
   return OK;
@@ -697,7 +720,12 @@ int ProcessFieldCommand(char *Line)
     GPS.UseHostPosition = 5;
     OK = 1;
   }
-  
+  else if ((Line[0] >= '0') && (Line[0] <= '5'))
+  {
+    GPS.ExtraFields[Line[0] - '0'] = atoi(Line+1);
+    OK = 1;
+  }
+ 
   return OK;
 }
 
@@ -705,22 +733,22 @@ unsigned char HexToByte(char ch)
 {
     int num=0;
     
-    if(ch>='0' && ch<='9')
+    if (ch>='0' && ch<='9')
     {
-        num=ch-0x30;
+        num=ch-'0';
+    }
+    else if (ch>='A' && ch<='F')
+    {
+        num = ch + 10 - 'A';
+    }
+    else if (ch>='a' && ch<='f')
+    {
+        num = ch + 10 - 'a';
     }
     else
     {
-        switch(ch)
-        {
-            case 'A': case 'a': num=10; break;
-            case 'B': case 'b': num=11; break;
-            case 'C': case 'c': num=12; break;
-            case 'D': case 'd': num=13; break;
-            case 'E': case 'e': num=14; break;
-            case 'F': case 'f': num=15; break;
-            default: num=0;
-        }
+      num=0;
     }
+    
     return num;
 }

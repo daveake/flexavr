@@ -19,6 +19,7 @@
 
 #ifdef APRS_DATA
 
+#include "SoftwareSerial.h"
 #include <util/crc16.h>
 // #include <avr/pgmspace.h>
 
@@ -37,8 +38,9 @@
 
 // Our variables
 
+SoftwareSerial APRS_Serial(APRS_RX, APRS_TX);
 unsigned long NextAPRS=0;
-int aprs_mode=0;
+byte aprs_mode=0;
 unsigned int APRSSentenceCounter;
 volatile static uint8_t *_txbuf = 0;
 volatile static uint8_t  _txlen = 0;
@@ -115,7 +117,7 @@ void ShowAPRSReply(void)
 {
   unsigned long Timeout;
 
-  Serial.println("Rx:");
+  Serial.println(F("Rx:"));
   Serial.print("[");
 
   Timeout = millis() + 4000;

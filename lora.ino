@@ -1,5 +1,4 @@
 #include <SPI.h>
-#include <string.h>
 
 // RFM98 registers
 #define REG_FIFO                    0x00
@@ -20,7 +19,10 @@
 #define REG_HOP_PERIOD              0x24
 #define REG_FREQ_ERROR              0x28
 #define REG_DETECT_OPT              0x31
-#define  REG_DETECTION_THRESHOLD     0x37
+#define REG_DETECTION_THRESHOLD     0x37
+#define REG_PACKET_SNR              0x19
+#define REG_PACKET_RSSI             0x1A
+#define REG_CURRENT_RSSI            0x1B
 #define REG_DIO_MAPPING_1           0x40
 #define REG_DIO_MAPPING_2           0x41
 
@@ -111,11 +113,12 @@ unsigned long TimeToSendIfNoGPS=0;
 
 void LoRaDefaults(void)
 {
-  Settings.Implicit = 0;
-  Settings.ErrorCoding = ERROR_CODING_4_8;
+  // MODE 1 (was 0 prior to V1.20)
+  Settings.Implicit = 1;
+  Settings.ErrorCoding = ERROR_CODING_4_5;
   Settings.Bandwidth = BANDWIDTH_20K8;
-  Settings.SpreadingFactor = SPREADING_11;
-  Settings.LowDataRateOptimize = 0x08;
+  Settings.SpreadingFactor = SPREADING_6;
+  Settings.LowDataRateOptimize = 0;
 }
 
 void SetupLoRa(void)
@@ -125,7 +128,13 @@ void SetupLoRa(void)
   pinMode(LORA_DIO0, INPUT);
 
   SPI.begin();
-  
+
+  // Terminate any current transmission
+  setMode(RF98_MODE_STANDBY);
+  setMode(RF98_MODE_SLEEP);
+  setMode(RF98_MODE_STANDBY);
+
+  // Initialise module
   SwitchToLoRaMode();
 }
 
@@ -266,8 +275,54 @@ void unselect()
   digitalWrite(LORA_NSS, HIGH);
 }
 
-/*
-/void CheckLoRaRx(void)
+void DecryptMessage(char *Code, char *Message)
+{
+  int i, Len;
+  
+  Len = strlen(Code);
+  
+  if (Len > 0)
+  {
+    printf("Decoding ...\n");
+    i = 0;
+    while (*Message)
+    {
+      *Message = (*Message ^ Code[i]) & 0x7F;
+      Message++;
+      i = (i + 1) % Len;
+    }
+  }
+}
+
+char GetChar(char **Message)
+{
+  return *((*Message)++);
+}
+
+void GetString(char *Field, char **Message)
+{
+  while (**Message && (**Message != '/'))
+  {
+    *Field++ = *((*Message)++);
+  }
+  
+  *Field = 0;
+  if (**Message)
+  {
+    (*Message)++;
+  }
+}
+
+int32_t GetInteger(char **Message)
+{
+  char Temp[32];
+  
+  GetString(Temp, Message);
+  
+  return atoi(Temp);
+}
+
+void CheckLoRaRx(void)
 {
   if (LoRaMode == lmListening)
   {
@@ -276,13 +331,72 @@ void unselect()
       unsigned int Bytes;
 					
       Bytes = receiveMessage(Telemetry, sizeof(Telemetry));
-      // Serial.print("Rx "); Serial.print(Bytes); Serial.println(" bytes");
+
+      if (Bytes > 0)
+      {
+        // Get RSSI etc
+        int8_t SNR;
+        int RSSI;
+        
+        SNR = readRegister(REG_PACKET_SNR);
+        SNR /= 4;
+        RSSI = readRegister(REG_PACKET_RSSI) - 157;
+        if (SNR < 0)
+        {
+          RSSI += SNR;
+        }
+        
+        GPS.LastPacketSNR = SNR;
+        GPS.LastPacketRSSI = RSSI;
       
-      Bytes = min(Bytes, sizeof(Telemetry));
+        if (Telemetry[0] == '*')
+        {
+          char Command, Parameter, PayloadID[16], *Message;
+          
+          Message = (char *)(Telemetry + 1);
+          
+          DecryptMessage(Settings.UplinkCode, Message);
+                   
+          Serial.println((char *)Telemetry);
+
+          GetString(PayloadID, &Message);
+          
+          if (strcmp(PayloadID, Settings.PayloadID) == 0)
+          {
+            GPS.ReceivedCommandCount++;
+
+            // strncpy(GPS.LastReceivedCommand, Message, sizeof(GPS.LastReceivedCommand));
+            
+            Command = GetChar(&Message);
+            
+            if (Command == 'C')
+            {
+              // Cutdown
+              Parameter = GetChar(&Message);
+            
+              if (Parameter == 'N')
+              {
+                int CutdownPeriod;
+                
+                // Cutdown Now
+                CutdownPeriod = GetInteger(&Message);
+                      
+                if (CutdownPeriod <= 0)
+                {
+                  CutdownPeriod = Settings.CutdownPeriod;
+                }
+                
+                CutdownNow(CutdownPeriod * 1000);
+                
+                GPS.CutdownStatus = 3;      // Manually triggered
+              }
+            }
+          }
+        }
+      }      
     }
   }
 }
-*/
 
 int TimeToSend(void)
 {
@@ -336,6 +450,7 @@ int LoRaIsFree(void)
 //    Serial.println(F("LoRaIsFree"));
 //    Serial.print(F("LoRaMode = "));Serial.println(LoRaMode);
 //    Serial.print(F("DIO0 = "));Serial.println(digitalRead(LORA_DIO0));
+    
     // Either not sending, or was but now it's sent.  Clear the flag if we need to
     if (LoRaMode == lmSending)
     {
@@ -356,14 +471,14 @@ int LoRaIsFree(void)
       return 1;
     }
     
-//    if (Settings.LoRaCycleTime > 0)
-//    {
-//      // TDM system and not time to send, so we can listen
-//      if (LoRaMode == lmIdle)
-//      {
-//        startReceiving();
-//      }
-//    }
+    if (Settings.LoRaCycleTime > 0)
+    {
+      // TDM system and not time to send, so we can listen
+      if (LoRaMode == lmIdle)
+      {
+        startReceiving();
+      }
+    }
   }
   
   return 0;
@@ -421,57 +536,57 @@ void SendLoRa(unsigned char *buffer, int Length)
 //  Serial.println("");
 }
 
-//void startReceiving(void)
-//{
-//  writeRegister(REG_DIO_MAPPING_1, 0x00);		// 00 00 00 00 maps DIO0 to RxDone
-//	
-//  writeRegister(REG_FIFO_RX_BASE_AD, 0);
-//  writeRegister(REG_FIFO_ADDR_PTR, 0);
-//	  
-//  // Setup Receive Continuous Mode
-//  setMode(RF98_MODE_RX_CONTINUOUS); 
-//		
-//  LoRaMode = lmListening;
-//}
+void startReceiving(void)
+{
+  writeRegister(REG_DIO_MAPPING_1, 0x00);		// 00 00 00 00 maps DIO0 to RxDone
+	
+  writeRegister(REG_FIFO_RX_BASE_AD, 0);
+  writeRegister(REG_FIFO_ADDR_PTR, 0);
+	  
+  // Setup Receive Continuous Mode
+  setMode(RF98_MODE_RX_CONTINUOUS); 
+		
+  LoRaMode = lmListening;
+}
 
-//int receiveMessage(unsigned char *message, int MaxLength)
-//{
-//  int i, Bytes, currentAddr, x;
-//
-//  Bytes = 0;
-//	
-//  x = readRegister(REG_IRQ_FLAGS);
-//  
-//  // clear the rxDone flag
-//  writeRegister(REG_IRQ_FLAGS, 0x40); 
-//    
-//  // check for payload crc issues (0x20 is the bit we are looking for
-//  if((x & 0x20) == 0x20)
-//  {
-//    // CRC Error
-//    writeRegister(REG_IRQ_FLAGS, 0x20);		// reset the crc flags
-//    BadCRCCount++;
-//  }
-//  else
-//  {
-//    currentAddr = readRegister(REG_FIFO_RX_CURRENT_ADDR);
-//    Bytes = readRegister(REG_RX_NB_BYTES);
-//    Bytes = min(Bytes, MaxLength-1);
-//
-//    writeRegister(REG_FIFO_ADDR_PTR, currentAddr);   
-//		
-//    for(i = 0; i < Bytes; i++)
-//    {
-//      message[i] = (unsigned char)readRegister(REG_FIFO);
-//    }
-//    message[Bytes] = '\0';
-//
-//    // Clear all flags
-//    writeRegister(REG_IRQ_FLAGS, 0xFF); 
-//  }
-//  
-//  return Bytes;
-//}
+int receiveMessage(unsigned char *message, int MaxLength)
+{
+  int i, Bytes, currentAddr, x;
+
+  Bytes = 0;
+	
+  x = readRegister(REG_IRQ_FLAGS);
+  
+  // clear the rxDone flag
+  writeRegister(REG_IRQ_FLAGS, 0x40); 
+    
+  // check for payload crc issues (0x20 is the bit we are looking for
+  if((x & 0x20) == 0x20)
+  {
+    // CRC Error
+    writeRegister(REG_IRQ_FLAGS, 0x20);		// reset the crc flags
+    BadCRCCount++;
+  }
+  else
+  {
+    currentAddr = readRegister(REG_FIFO_RX_CURRENT_ADDR);
+    Bytes = readRegister(REG_RX_NB_BYTES);
+    Bytes = min(Bytes, MaxLength-1);
+
+    writeRegister(REG_FIFO_ADDR_PTR, currentAddr);   
+		
+    for(i = 0; i < Bytes; i++)
+    {
+      message[i] = (unsigned char)readRegister(REG_FIFO);
+    }
+    message[Bytes] = '\0';
+
+    // Clear all flags
+    writeRegister(REG_IRQ_FLAGS, 0xFF); 
+  }
+  
+  return Bytes;
+}
 
 int FSKPacketSent(void)
 {
@@ -487,13 +602,15 @@ int FSKBufferLow(void)
 void CheckLoRa(void)
 {
   static unsigned int ImageCount=0;
+
+  CheckLoRaRx();
   
   if (LoRaIsFree())
   {
     int PacketLength;
 
     // SSDV or Telemetry?
-    if (++ImageCount > (GPS.Altitude > Settings.High ? Settings.HighImageCount : Settings.HighImageCount))
+    if (++ImageCount > (GPS.Altitude > Settings.High ? Settings.HighImageCount : Settings.LowImageCount))
     {
       ImageCount = 0;
     }

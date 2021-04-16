@@ -1,8 +1,11 @@
 char Hex(unsigned char Character)
 {
-  char HexTable[] = "0123456789ABCDEF";
-  
-  return HexTable[Character];
+  if (Character < 10)
+  {
+    return '0' + Character;
+  }
+
+  return 'A' + Character - 10;
 }
 
 int BuildSentence(char *TxLine)
@@ -87,6 +90,26 @@ int BuildSentence(char *TxLine)
     else if (Field == 'D')
     {
       dtostrf(GPS.PredictedLongitude, 7, 5, Temp);
+    }
+    else if (Field == 'E')
+    {
+      sprintf(Temp, "%d", GPS.CutdownStatus);
+    }
+    else if (Field == 'F')
+    {
+      sprintf(Temp, "%d", GPS.LastPacketSNR);
+    }
+    else if (Field == 'G')
+    {
+      sprintf(Temp, "%d", GPS.LastPacketRSSI);
+    }
+    else if (Field == 'H')
+    {
+      sprintf(Temp, "%u", GPS.ReceivedCommandCount);
+    }
+    else if ((Field >= 'I') && (Field <= 'N'))
+    {
+      sprintf(Temp, "%u", GPS.ExtraFields[Field-'I']);
     }
 
     if (i > 0)

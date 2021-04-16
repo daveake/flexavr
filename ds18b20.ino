@@ -15,9 +15,9 @@
 #define MAX_SENSORS  2
 // Variables
 
-int SensorCount=0;       // Number of temperature devices found
+byte SensorCount=0;       // Number of temperature devices found
 unsigned long CheckDS18B20s=0;
-int GettingTemperature=0;
+byte GettingTemperature=0;
 OneWire oneWire(WIREBUS);                    // OneWire port
 DallasTemperature sensors(&oneWire);   // Pass oneWire reference to Dallas Temperature object
 
