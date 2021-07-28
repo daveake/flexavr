@@ -7,7 +7,10 @@
 #include <EEPROM.h>
 #include <avr/pgmspace.h>
 
-#define   VERSION   F("V1.20")
+#define   VERSION   F("V1.21")
+
+#define SIG_1   'D'
+#define SIG_2   'C'
 
 //------------------------------------------------------------------------------------------------------
 
@@ -128,7 +131,7 @@ void setup()
   Serial.print(F("Free memory = "));
   Serial.println(freeRam());
 
-  if ((EEPROM.read(0) == 'D') && (EEPROM.read(1) == 'C'))
+  if ((EEPROM.read(0) == SIG_1) && (EEPROM.read(1) == SIG_2))
   {
     // Store current (default) settings
     LoadSettings();
@@ -261,8 +264,8 @@ void SaveSettings(void)
   unsigned char *ptr;
   
   // Signature
-  EEPROM.write(0, 'D');
-  EEPROM.write(1, 'A');
+  EEPROM.write(0, SIG_1);
+  EEPROM.write(1, SIG_2);
 
   // Settings
   ptr = (unsigned char *)(&Settings);
