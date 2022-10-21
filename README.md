@@ -16,6 +16,8 @@ https://github.com/daveake/HAB-Documentation/blob/main/FlexTrak%20Manual.pdf
 
 ## Releases
 
+V1.22	-	Added option to send the field list
+
 V1.21	-	Bug fix - saved settings not being loaded from flash.
 
 V1.20	-	Reduced RAM footprint.  Reset radio on startup.  Default 434.225MHz Mode 1.

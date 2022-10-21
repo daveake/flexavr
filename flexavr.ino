@@ -7,10 +7,10 @@
 #include <EEPROM.h>
 #include <avr/pgmspace.h>
 
-#define   VERSION   F("V1.21")
+#define   VERSION   F("V1.22")
 
 #define SIG_1   'D'
-#define SIG_2   'C'
+#define SIG_2   'D'
 
 //------------------------------------------------------------------------------------------------------
 
@@ -82,6 +82,8 @@ struct TSettings
 
   // DS18B20
   unsigned char DS18B20_Address[8];
+
+  char          IncludeFieldList;
 } Settings;
 
 struct TGPS
@@ -452,6 +454,12 @@ int ProcessCommonCommand(char *Line)
   {
     // Cutdown Time  
      Settings.CutdownPeriod = atoi(Line+1);
+     OK = 1;
+  }
+  else if (Line[0] == 'L')
+  {
+    // Enable/Disable Field List
+     Settings.IncludeFieldList = Line[1] == '1';
      OK = 1;
   }
 

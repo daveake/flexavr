@@ -119,6 +119,12 @@ int BuildSentence(char *TxLine)
     strcat(TxLine, Temp);
   }
 
+  if (Settings.IncludeFieldList)
+  {
+    strcat(TxLine, ",");
+    strcat(TxLine, Settings.FieldList);
+  }
+
   Count = strlen(TxLine);
 
   CRC = 0xffff;           // Seed
